@@ -2,3 +2,4 @@
 And fails sometimes after delivering a package.
    - Instert some logs to checkout what is happening. 
    - Define a state if we got into a pickup or delivery point and control that we stay there 1 time.
+   - When there is no path found we could calculate it again without taking into account the cost.
