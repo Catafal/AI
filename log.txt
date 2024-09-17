@@ -1,0 +1,3 @@
+- v1: works sometimes. Gets 190 turns.
+And fails sometimes after delivering a package.
+   - Instert some logs to checkout what is happening.
