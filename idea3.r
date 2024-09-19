@@ -31,92 +31,50 @@ estimate_future_cost <- function(current_cost, steps_ahead) {
 
 
 astar <- function(start, goal, roads) {
-  cat(sprintf("Starting A* algorithm. Start: (%d, %d), Goal: (%d, %d)\n", 
-              start[1], start[2], goal[1], goal[2]))
   dim <- nrow(roads$hroads)
   
-  # Initialize frontier as a list
   frontier <- list(list(pos = start, g = 0, h = manhattan_distance(start, goal), f = 0, path = list()))
-  
-  # Initialize closed set to keep track of explored nodes
   closed <- matrix(FALSE, nrow = dim, ncol = dim)
   
-  # Initialize g_scores matrix to store the best known cost to reach each node
-  g_scores <- matrix(Inf, nrow = dim, ncol = dim)
-  g_scores[start[1], start[2]] <- 0
-  
-  iterations <- 0
   while (length(frontier) > 0) {
-    iterations <- iterations + 1
-    if (iterations %% 100 == 0) {
-      cat(sprintf("A* iteration %d. Frontier size: %d\n", iterations, length(frontier)))
-    }
+    current <- frontier[[which.min(sapply(frontier, function(node) node$f))]]
+    frontier <- frontier[-which.min(sapply(frontier, function(node) node$f))]
     
-    # Find the node with the lowest f-score in the frontier
-    best_index <- which.min(sapply(frontier, function(node) node$f))
-    current <- frontier[[best_index]]
-    frontier <- frontier[-best_index]
-    
-    # Check if we've reached the goal
     if (all(current$pos == goal)) {
-      cat(sprintf("A* found path to goal in %d iterations. Path length: %d\n", iterations, length(current$path)))
       return(current$path)
     }
     
-    # Mark the current node as explored
-    closed[current$pos[1], current$pos[2]] <- TRUE
+    # Check if current position is within bounds before marking as closed
+    if (all(current$pos >= 1) && all(current$pos <= dim)) {
+      closed[current$pos[1], current$pos[2]] <- TRUE
+    }
     
-    # Define and evaluate neighbors (up, down, right, left)
     neighbors <- list(
-      list(pos = c(current$pos[1], current$pos[2] + 1), cost = roads$vroads[current$pos[1], current$pos[2]], move = 8),
-      list(pos = c(current$pos[1], current$pos[2] - 1), cost = roads$vroads[current$pos[1], current$pos[2] - 1], move = 2),
-      list(pos = c(current$pos[1] + 1, current$pos[2]), cost = roads$hroads[current$pos[1], current$pos[2]], move = 6),
-      list(pos = c(current$pos[1] - 1, current$pos[2]), cost = roads$hroads[current$pos[1] - 1, current$pos[2]], move = 4)
+      list(pos = c(current$pos[1], current$pos[2] + 1), cost = ifelse(current$pos[2] < dim, roads$vroads[current$pos[1], current$pos[2]], Inf), move = 8),
+      list(pos = c(current$pos[1], current$pos[2] - 1), cost = ifelse(current$pos[2] > 1, roads$vroads[current$pos[1], current$pos[2] - 1], Inf), move = 2),
+      list(pos = c(current$pos[1] + 1, current$pos[2]), cost = ifelse(current$pos[1] < dim, roads$hroads[current$pos[1], current$pos[2]], Inf), move = 6),
+      list(pos = c(current$pos[1] - 1, current$pos[2]), cost = ifelse(current$pos[1] > 1, roads$hroads[current$pos[1] - 1, current$pos[2]], Inf), move = 4)
     )
     
     for (neighbor in neighbors) {
-      # Check if neighbor is within grid bounds
-      if (neighbor$pos[1] < 1 || neighbor$pos[1] > dim || neighbor$pos[2] < 1 || neighbor$pos[2] > dim) {
+      if (any(neighbor$pos < 1) || any(neighbor$pos > dim) || neighbor$cost == Inf) {
         next
       }
       
-      # Skip if this neighbor has already been explored
       if (closed[neighbor$pos[1], neighbor$pos[2]]) {
         next
       }
       
-      # Not using estimate costs
-      # g <- current$g + neighbor$cost
+      g <- current$g + neighbor$cost
+      h <- manhattan_distance(neighbor$pos, goal)
+      f <- g + h
       
-      # Estimate future cost based on current path length
-      estimated_future_cost <- estimate_future_cost(neighbor$cost, length(current$path))
-      
-      # Calculate the cost to reach this neighbor through the current path
-      g <- current$g + estimated_future_cost
-      
-      # If we've found a better path to this neighbor
-      if (g < g_scores[neighbor$pos[1], neighbor$pos[2]]) {
-        # Calculate heuristic cost (estimated cost from this neighbor to the goal)
-        h <- manhattan_distance(neighbor$pos, goal)
-        
-        # Calculate total estimated cost (f = g + h)
-        f <- g + h
-        
-        # Update the best known cost to reach this neighbor
-        g_scores[neighbor$pos[1], neighbor$pos[2]] <- g
-        
-        # Create a new node for this neighbor
-        new_node <- list(pos = neighbor$pos, g = g, h = h, f = f, path = c(current$path, neighbor$move))
-        
-        # Add the new node to the frontier
-        frontier <- c(frontier, list(new_node))
-      }
+      new_node <- list(pos = neighbor$pos, g = g, h = h, f = f, path = c(current$path, neighbor$move))
+      frontier <- c(frontier, list(new_node))
     }
   }
   
-  # If we've exhausted all possible paths without reaching the goal
-  cat(sprintf("WARNING: A* failed to find path after %d iterations\n", iterations))
-  return(list())
+  return(list())  # Return empty list if no path found
 }
 
 
@@ -190,70 +148,90 @@ find_closest_reachable_package <- function(car, packages, roads) {
   }
 }
 
+find_closest_reachable_package2 <- function(car, packages, roads) {
+  if (is.null(packages) || nrow(packages) == 0 || ncol(packages) < 5) {
+    return(NULL)
+  }
+  
+  # If there's only one package, return it directly
+  if (nrow(packages) == 1) {
+    path <- astar(c(car$x, car$y), packages[1, 1:2], roads)
+    return(list(package = packages[1, ], path = path))
+  }
+  
+  # Calculate Manhattan distances to all packages
+  distances <- apply(packages[, 1:2], 1, function(p) manhattan_distance(c(car$x, car$y), p))
+  
+  # Sort packages by Manhattan distance
+  sorted_indices <- order(distances)
+  
+  # Check the closest 3 packages (or all if less than 3)
+  num_to_check <- min(3, nrow(packages))
+  
+  for (i in 1:num_to_check) {
+    package <- packages[sorted_indices[i], ]
+    path <- astar(c(car$x, car$y), package[1:2], roads)
+    
+    if (length(path) > 0) {
+      return(list(package = package, path = path))
+    }
+  }
+  
+  # If no path found, return the closest package by Manhattan distance
+  closest_package <- packages[sorted_indices[1], ]
+  return(list(package = closest_package, path = list()))
+}
+
 
 myFunction <- function(roads, car, packages) {
-  cat(sprintf("Starting new turn. Car position: (%d, %d), Load: %d\n", car$x, car$y, car$load))
+  packages_to_deliver <- sum(packages[, 5] < 2)
+  cat(sprintf("Turn start: %d packages left to deliver\n", packages_to_deliver))
   
   if (car$load == 0) {
-    cat("Car has no package. Selecting best pickup.\n")
-    available_packages <- if (!is.null(packages) && ncol(packages) >= 5) packages[packages[,5] == 0, , drop = FALSE] else NULL
-    if (is.null(available_packages) || nrow(available_packages) == 0) {
-      cat("No more packages to pick up. Game should end.\n")
-      cat("\n")
-      car$nextMove <- 5  # Stay still
+    available_packages <- packages[packages[,5] == 0, , drop = FALSE]
+    if (nrow(available_packages) == 0) {
+      car$nextMove <- 5  # Stay still if no packages to pick up
       return(car)
     }
-    # Changing conditions that's why we will be checking every move without load the best package to go after
-    result <- find_closest_reachable_package(car, available_packages, roads)
+    result <- find_closest_reachable_package2(car, available_packages, roads)
     if (is.null(result)) {
-      cat("WARNING: No reachable packages found. Keeps stucked.\n")
-      cat("\n")
-      car$nextMove <- 5
+      # Fallback: Move towards the nearest package using Manhattan distance
+      # distances <- apply(available_packages[, 1:2], 1, function(p) manhattan_distance(c(car$x, car$y), p))
+      # nearest_package <- available_packages[which.min(distances), ]
+      # target <- nearest_package[1:2]
+      
+      car$nextMove <- 5  # Stay still if no reachable package
       return(car)
-    }
-    target <- result$package[1:2]
-    path <- result$path
-    cat(sprintf("Selected pickup target: (%d, %d)\n", target[1], target[2]))
+      
+    } #else {
+      target <- result$package[1:2]
+      path <- result$path
+    #}
   } else {
-    cat("Car has a package. Going to delivery.\n")
-    delivery <- if (!is.null(packages) && ncol(packages) >= 5) packages[packages[,5] == 1, , drop = FALSE] else NULL
-    if (is.null(delivery) || nrow(delivery) == 0) {
-      cat("ERROR: Car has a package but no delivery is scheduled. Staying still.\n")
-      cat("\n")
-      car$nextMove <- 5
+    delivery <- packages[packages[,5] == 1, , drop = FALSE]
+    if (nrow(delivery) == 0) {
+      car$nextMove <- 5  # Stay still if no delivery scheduled
       return(car)
     }
-    target <- if (is.vector(delivery)) delivery[3:4] else delivery[1, 3:4]
-    result <- astar(c(car$x, car$y), target, roads)  #find_closest_reachable_package(car, delivery, roads)
-    if (is.null(result)) {
-      cat("WARNING: Delivery unreachable. Keeps stucked.\n")
-      cat("\n")
-      car$nextMove <- 5
-      return(car)
-    }
-    path <- result
-    cat(sprintf("Delivery target: (%d, %d)\n", target[1], target[2]))
+    target <- delivery[1, 3:4]
+    path <- astar(c(car$x, car$y), target, roads)
   }
+  
+  #path <- astar(c(car$x, car$y), target, roads)
   
   if (length(path) > 0) {
     car$nextMove <- path[[1]]
-    cat(sprintf("Path found. Next move: %d\n", car$nextMove))
   } else {
-    # If no path found, move towards the target using Manhattan distance
-    #dx <- target[1] - car$x
-    #dy <- target[2] - car$y
-    #if (abs(dx) > abs(dy)) {
-    #  car$nextMove <- if (dx > 0) 6 else 4
-    #} else {
-    #  car$nextMove <- if (dy > 0) 8 else 2
-    #}
-    #cat(sprintf("No path found. Moving towards target. Next move: %d\n", car$nextMove))
-    cat("Path not found by A*. Not moving \n")
-    car$nextMove <- 5
+    # Fallback: Move towards the target using Manhattan distance
+    dx <- target[1] - car$x
+    dy <- target[2] - car$y
+    if (abs(dx) > abs(dy)) {
+      car$nextMove <- if (dx > 0) 6 else 4
+    } else {
+      car$nextMove <- if (dy > 0) 8 else 2
+    }
   }
   
-  cat(sprintf("Turn completed. Next move: %d\n\n", car$nextMove))
-  cat("---------------------------- \n")
   return(car)
 }
 
