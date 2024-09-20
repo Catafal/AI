@@ -1,5 +1,17 @@
-- v1: works sometimes. Gets 190 turns.
-And fails sometimes after delivering a package.
-   - Instert some logs to checkout what is happening. 
-   - Define a state if we got into a pickup or delivery point and control that we stay there 1 time.
-   - When there is no path found we could calculate it again without taking into account the cost.
+- NOW WORKS.
+
+Potential improvements:
+   Traffic prediction: Try to predict how traffic will evolve and incorporate this into your path planning.
+   Package clustering: If there are multiple packages with nearby pickup or delivery locations, try to handle them in a single trip.
+   Avoid high-traffic areas: If certain areas consistently have high traffic, try to plan routes that avoid these areas when possible.
+   Try to select the packages with the a* instead with only manhattan. (so consider traffic instead of only distance)
+
+
+--------------
+manhattan_distance: Calculates the Manhattan distance between two points.
+astar: Implements the A* pathfinding algorithm.
+find_closest_reachable_package2: Finds the best package to pick up next, considering all possible orderings of packages.
+permutations: Generates all possible permutations of n elements.
+myFunction: The main control function for the delivery man, deciding what to do each turn.
+
+The key improvement that likely led to better performance is in find_closest_reachable_package2, which now considers all possible orderings of packages and chooses the best one based on estimated total cost. This helps in making more globally optimal decisions rather than just choosing the nearest package each time.
