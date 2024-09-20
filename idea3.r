@@ -4,27 +4,31 @@
 
 library(DeliveryMan)
 
+# Calculate Manhattan distance between two points
 manhattan_distance <- function(a, b) {
   return(abs(a[1] - b[1]) + abs(a[2] - b[2]))
 }
 
+# A* algorithm implementation
 astar <- function(start, goal, roads) {
   dim <- nrow(roads$hroads)
   
+  # Initialize frontier with start node
   frontier <- list(list(pos = start, g = 0, h = manhattan_distance(start, goal), f = 0, path = integer()))
   closed <- matrix(FALSE, nrow = dim, ncol = dim)
   
   while (length(frontier) > 0) {
-    # Sort the frontier by f-value and select the first (best) node
+    # Sort frontier by f-value and select the best node
     frontier <- frontier[order(sapply(frontier, function(node) node$f))]
     current <- frontier[[1]]
     frontier <- frontier[-1]
     
+    # Check if we've reached the goal
     if (all(current$pos == goal)) {
       return(current$path)
     }
     
-    # Check if current position is within bounds
+    # Process current node if it's within bounds and not visited
     if (all(current$pos >= 1) && all(current$pos <= dim)) {
       if (closed[current$pos[1], current$pos[2]]) {
         next
@@ -34,6 +38,7 @@ astar <- function(start, goal, roads) {
       next  # Skip this node if it's out of bounds
     }
     
+    # Generate neighboring nodes
     neighbors <- list(
       list(pos = c(current$pos[1], current$pos[2] + 1), move = 8),
       list(pos = c(current$pos[1], current$pos[2] - 1), move = 2),
@@ -41,11 +46,13 @@ astar <- function(start, goal, roads) {
       list(pos = c(current$pos[1] - 1, current$pos[2]), move = 4)
     )
     
+    # Process each neighbor
     for (neighbor in neighbors) {
       if (any(neighbor$pos < 1) || any(neighbor$pos > dim)) {
         next
       }
       
+      # Calculate cost to move to neighbor
       cost <- if (neighbor$move %in% c(4, 6)) {
         if (neighbor$pos[1] >= 1 && neighbor$pos[1] <= dim && 
             current$pos[1] >= 1 && current$pos[1] <= dim && 
@@ -64,14 +71,17 @@ astar <- function(start, goal, roads) {
         }
       }
       
+      # Skip if cost is infinite or node is already closed
       if (is.infinite(cost) || (all(neighbor$pos >= 1) && all(neighbor$pos <= dim) && closed[neighbor$pos[1], neighbor$pos[2]])) {
         next
       }
       
+      # Calculate f, g, and h values for neighbor
       g <- current$g + cost
       h <- manhattan_distance(neighbor$pos, goal)
       f <- g + h
       
+      # Add neighbor to frontier
       new_node <- list(pos = neighbor$pos, g = g, h = h, f = f, path = c(current$path, neighbor$move))
       frontier <- c(frontier, list(new_node))
     }
@@ -80,68 +90,28 @@ astar <- function(start, goal, roads) {
   return(integer())  # Return empty integer vector if no path found
 }
 
-find_closest_reachable_package <- function(car, packages, roads) {
-  if (is.null(packages) || nrow(packages) == 0 || ncol(packages) < 5) {
-    return(NULL)
-  }
-  
-  # If there's only one package, return it directly
-  if (nrow(packages) == 1) {
-    path <- astar(c(car$x, car$y), packages[1, 1:2], roads)
-    return(list(package = packages[1, ], path = path))
-  }
-  
-  # Calculate Manhattan distances to all packages
-  distances <- apply(packages[, 1:2], 1, function(p) manhattan_distance(c(car$x, car$y), p))
-  
-  # Sort packages by Manhattan distance
-  sorted_indices <- order(distances)
-  
-  # Check the closest 3 packages (or all if less than 3)
-  num_to_check <- min(3, nrow(packages))
-  
-  for (i in 1:num_to_check) {
-    package <- packages[sorted_indices[i], ]
-    path <- astar(c(car$x, car$y), package[1:2], roads)
-    
-    if (length(path) > 0) {
-      return(list(package = package, path = path))
-    }
-  }
-  
-  # If no path found, return the closest package by Manhattan distance
-  closest_package <- packages[sorted_indices[1], ]
-  return(list(package = closest_package, path = list()))
-}
-
+# Find the best package to pick up next
 find_closest_reachable_package2 <- function(car, packages, roads) {
   if (is.null(packages) || nrow(packages) == 0 || ncol(packages) < 5) {
     return(NULL)
   }
   
-  # Helper function to calculate Manhattan distance
-  manhattan_distance <- function(a, b) {
-    return(abs(a[1] - b[1]) + abs(a[2] - b[2]))
-  }
-  
-  # Function to estimate the cost of a path considering traffic
+  # Estimate cost of a path considering traffic
   estimate_path_cost <- function(start, end, roads) {
     distance <- manhattan_distance(start, end)
     avg_traffic <- mean(c(roads$hroads, roads$vroads))
     return(distance * avg_traffic)
   }
   
-  # Function to calculate the total cost of a given order of packages
+  # Calculate total cost for a given order of packages
   calculate_order_cost <- function(order, car_pos) {
     total_cost <- 0
     current_pos <- car_pos
     
     for (i in order) {
       package <- packages[i, ]
-      # Cost to pick up
-      total_cost <- total_cost + estimate_path_cost(current_pos, package[1:2], roads)
-      # Cost to deliver
-      total_cost <- total_cost + estimate_path_cost(package[1:2], package[3:4], roads)
+      total_cost <- total_cost + estimate_path_cost(current_pos, package[1:2], roads)  # Pickup cost
+      total_cost <- total_cost + estimate_path_cost(package[1:2], package[3:4], roads)  # Delivery cost
       current_pos <- package[3:4]  # Update position to delivery point
     }
     
@@ -170,7 +140,7 @@ find_closest_reachable_package2 <- function(car, packages, roads) {
   return(list(package = best_package, path = best_path))
 }
 
-# Helper function to generate all permutations
+# Generate all permutations of n elements
 permutations <- function(n) {
   if (n == 1) {
     return(matrix(1))
@@ -185,14 +155,13 @@ permutations <- function(n) {
   }
 }
 
-
-
+# Main control function for the delivery man
 myFunction <- function(roads, car, packages) {
   packages_to_deliver <- sum(packages[, 5] < 2)
   cat(sprintf("Turn start: %d packages left to deliver.\n", packages_to_deliver))
   
   if (car$load == 0) {
-    cat("I am loaded \n")
+    cat("I am not loaded \n")
     available_packages <- packages[packages[,5] == 0, , drop = FALSE]
     if (nrow(available_packages) == 0) {
       car$nextMove <- 5  # Stay still if no packages to pick up
@@ -202,13 +171,12 @@ myFunction <- function(roads, car, packages) {
     if (is.null(result)) {
       car$nextMove <- 5  # Stay still if no reachable package
       return(car)
-      
     } else {
       target <- result$package[1:2]
       path <- result$path
     }
   } else {
-    cat("I am NOT loaded \n")
+    cat("I am loaded \n")
     delivery <- packages[packages[,5] == 1, , drop = FALSE]
     if (nrow(delivery) == 0) {
       car$nextMove <- 5  # Stay still if no delivery scheduled
@@ -218,6 +186,7 @@ myFunction <- function(roads, car, packages) {
     path <- astar(c(car$x, car$y), target, roads)
   }
   
+  # Determine next move
   if (length(path) > 0) {
     car$nextMove <- path[[1]]
   } else {
@@ -233,8 +202,6 @@ myFunction <- function(roads, car, packages) {
   
   return(car)
 }
-
-
 
 # Run the game
 #runDeliveryMan(myFunction, doPlot = TRUE)
