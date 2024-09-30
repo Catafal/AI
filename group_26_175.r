@@ -39,12 +39,14 @@ astar <- function(start, goal, roads) {
     }
     
     # Generate neighboring nodes
-    neighbors <- list(
-      list(pos = c(current$pos[1], current$pos[2] + 1), move = 8),
-      list(pos = c(current$pos[1], current$pos[2] - 1), move = 2),
-      list(pos = c(current$pos[1] + 1, current$pos[2]), move = 6),
-      list(pos = c(current$pos[1] - 1, current$pos[2]), move = 4)
-    )
+    neighbors <- list()
+    moves <- list(c(0, 1, 8), c(0, -1, 2), c(1, 0, 6), c(-1, 0, 4))
+    for (move in moves) {
+      new_pos <- c(current$pos[1] + move[1], current$pos[2] + move[2])
+      if (all(new_pos >= 1) && all(new_pos <= dim)) {
+        neighbors <- c(neighbors, list(list(pos = new_pos, move = move[3])))
+      }
+    }
     
     # Process each neighbor
     for (neighbor in neighbors) {
@@ -158,10 +160,10 @@ permutations <- function(n) {
 # Main control function for the delivery man
 myFunction <- function(roads, car, packages) {
   packages_to_deliver <- sum(packages[, 5] < 2)
-  cat(sprintf("Turn start: %d packages left to deliver.\n", packages_to_deliver))
+  #cat(sprintf("Turn start: %d packages left to deliver.\n", packages_to_deliver))
   
   if (car$load == 0) {
-    cat("I am not loaded \n")
+    #cat("I am not loaded \n")
     available_packages <- packages[packages[,5] == 0, , drop = FALSE]
     if (nrow(available_packages) == 0) {
       car$nextMove <- 5  # Stay still if no packages to pick up
@@ -176,7 +178,7 @@ myFunction <- function(roads, car, packages) {
       path <- result$path
     }
   } else {
-    cat("I am loaded \n")
+    #cat("I am loaded \n")
     delivery <- packages[packages[,5] == 1, , drop = FALSE]
     if (nrow(delivery) == 0) {
       car$nextMove <- 5  # Stay still if no delivery scheduled
@@ -206,8 +208,8 @@ myFunction <- function(roads, car, packages) {
 # Run the game
 #runDeliveryMan(myFunction, doPlot = TRUE)
 results_vector = testDM(myFunction, returnVec = TRUE)
-print(results_vector)
-cat("Mean score:", mean(results_vector), "\n")
+#print(results_vector)
+#cat("Mean score:", mean(results_vector), "\n")
 #cat("Standard deviation:", sd(results_vector), "\n")
 #cat("Minimum score:", min(results_vector), "\n")
 #cat("Maximum score:", max(results_vector), "\n")
