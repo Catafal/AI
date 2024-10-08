@@ -43,7 +43,10 @@ astar <- function(start, goal, roads) {
     moves <- list(c(0, 1, 8), c(0, -1, 2), c(1, 0, 6), c(-1, 0, 4))
     for (move in moves) {
       new_pos <- c(current$pos[1] + move[1], current$pos[2] + move[2])
-      if (all(new_pos >= 1) && all(new_pos <= dim)) {
+      if (new_pos[1] < 1 || new_pos[1] > dim || new_pos[2] < 1 || new_pos[2] > dim || closed[new_pos[1], new_pos[2]]) {
+        next
+      }
+      else if (all(new_pos >= 1) && all(new_pos <= dim)) {
         neighbors <- c(neighbors, list(list(pos = new_pos, move = move[3])))
       }
     }
@@ -200,6 +203,19 @@ myFunction <- function(roads, car, packages) {
     } else {
       car$nextMove <- if (dy > 0) 8 else 2
     }
+  }
+  
+  if (car$nextMove == 2 && car$y == 1) { 
+    if (car$x == target[1]) {
+      car$nextMove <- 5  # Stay still if at target x-coordinate
+    } else {
+      car$nextMove <- if (car$x < target[1]) 6 else 4  # Move horizontally towards target
+    }
+  }
+  
+  if(car$nextMove == 2 && car$y == 1) { 
+    print(target) 
+    print(car) 
   }
   
   return(car)
